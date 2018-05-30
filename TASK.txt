@@ -6,35 +6,154 @@ Here is the list of tasks:
 
 #1 - Create a github account (if you don't have one yet) and fork this repo. We would like you to write down the answers of the questions we ask in the forked version of this text file. If the task requires some practical exercises, we would like you to write every command you use
 
+A)	$ git clone https://github.com/hharshaa/sfc_interns.git
+
 #2 - Set up the VPN to connect to our lab. To do so, read the instructions in the next link under the section "Using the VPN":
 
 https://wiki.opnfv.org/display/INF/Lab-as-a-Service+at+the+UNH-IOL
 
 Your username and password for the VPN were provided to you in the mail
 
+A) $ sudo openvpn ~/Downloads/laas_opnfv.ovpn
+
 #3 - Connect to our server (10.10.100.21) using ssh with username opnfv and the same for password
+
+A)	$ ssh opnfv@10.10.100.21
 
 #4 - How would you ssh our server without having to write the password? If you know a way, apart from briefly explaining how, please try to do it. HINT: Restarting the sshd process (ssh server) is not needed
 
+A) Using public-key authentication
+
+	Gene
+
+	$ ssh-keygen
+	$ ssh-copy-id -i ~/.ssh/id_rsa.pub 10.10.100.21
+	$ ssh opnfv@10.10.100.21
+
 #5 - ssh to your VM running in the server. The ip was provided in the mail
+
+A)	$ ssh root@192.168.122.2
 
 #6 - How would you ssh directly from your computer to the VM without having to use ssh twice (one to connect to the server and another one to connect to the VM)? If you know a way, apart from briefly explaining how, please try to do it.
 
+A)	-> Dynamic jumphost list
+
+	$ ssh -J opnfv@10.10.100.21 root@192.168.122.2 
+
+    -> I could port forward the traffic from a certain server's port (say 2048) to ssh port of the guest VM, but this would require us to assign a static IP to the guest VM (virsh net-edit default) 
+       and add some rules to the iptables of the server which is a one-time thing.
+
+	$ ssh -p 2048 opnfv@10.10.100.21
+
 #7 - Install docker inside the VM
+
+A)	$ apt install docker.io
+
+	or install docker community edition as instructed in their website.
 
 #8 - Create 2 docker containers (use opensuse or ubuntu as their operating system) making sure that they don't stop when you leave them. From now on, we will call these containers: container1 and container2
 
+A)	$ mkdir container && cd container && vim Dockerfile
+	$ cat Dockerfile
+
+		+------------------------------------+
+		+	FROM ubuntu:xenial				 +
+		+									 +
+		+	RUN apt update && \				 +
+		+	    apt install -y iputils-ping  +
+		+------------------------------------+
+
+	$ docker build -t ubuntu .
+	$ docker run -itd --name container1 ubuntu
+	$ docker run -itd --name container2 ubuntu
+
 #9 - Make sure you can ping between both containers
+
+A)	$ docker exec container1 hostname -I
+	$ docker exec container2 hostname -I
+	$ docker exec container1 ping -c 5 172.17.0.3
+	$ docker exec container2 ping -c 5 172.17.0.2
 
 #10 - Explain what are the used networking protocols and the exchanged packets that appear in order for ping to be successful (e.g. container2 first sends a UDP packet with the IP of container 1...)
 
 #11 - Describe in detail what is the path the packets follow since they leave the interface inside container1 until they reach the interface inside container2
 
+Combine answer to the #10 and #11
+
+A)	$ docker exec -it container2 ping -c 1 172.17.0.2
+
+	-> As the ping program initializes, it opens a raw ICMP socket so that can employ IP directly, to circumvent TCP and UDP.
+	-> Next an ICMP type 8 message, an Echo Request payload is crafted. ICMP hands that payload to IP. ICMP messages are carries as IP datagrams
+	-> IP works with the Address Resolution Protocol(ARP) to determine which network this packet is destined to by consulting the routing table to find the next hop towards the destination(172.17.0.2)
+	-> Since the address 172.17.0.2 is in the same subnet(172.17.0.0/16), it uses ARP cache to figure out the MAC  address of the container1's  network interface.
+	-> Note:  If the MAC address of the container1 is not found in the ARP cache, the container2 sends an ARP request (broadcast) (172.17.255.255) on the network (172.17.0.0) requesting the MAC address of the
+			  for the 172.17.0.2. Then the container1(172.17.0.2) on receiving the request and sends an Ethernet frame with the destination to the container2 with 
+			  the MAC address. Now, the container1 and container2 are aware of the IP address and MAC address of each other. (ARP cache)
+	-> The system provides the IP header and data link layer envelope. At a minium, this packet contains source IP address,	destination IP address, ICMP Echo Request. All of that tells the receiving host 
+	   whom to hand the payload to — which in this case is ICMP.
+	-> This IP packet is sent over the eth0 interface. The virtual Ethernet bridge (docker0) forwards it to the container1.
+	-> When container1 receives the packet through its eth0 interface, it handles the packet to IP. 
+	-> IP finds instructions to give the payload to ICMP.
+ 	-> When container1 receives this ICMP Echo Request, it has to reply with a type 0 message, an ICMP responds with Echo Reply payload.
+	-> This payload is encapsulated by the IP header and Ethernet frame and sent through its eth0 interface. The docker0 forwards it to container2.
+	-> Here IP finds instructions to give the payload to ICMP, and ICMP determines the packet to be an ICMP Echo Reply.
+	-> Note : Since the ping program uses raw ICMP socket, circumventing the facilities of Transport Layer, it forego the problem addressing mechanism, port numbering scheme. 
+			  This means that ping must sift through all the incoming ping packets presented to it.	
+	-> Ping uses the timestamp in the data area of the Echo Reply to calculate a round-trip time. It also reports the TTL from the IP header of the reply.
+
+
+	+--------------------------------------------------------------------------------------------------------------------------+
+	|	container2																											   |
+	|																										ARP cache		   |
+	|																										    |              |
+	|																				<------------------------> ARP ----        |
+	|																			  /							    		\___   |								
+	|																			  |							    	  		\  |		 
+	|		    ping program <------------------------------------------> ICMP + IP < --------------------------------------> eth0 <------->veth682aac3 
+	|		    																  |						                  (172.17.0.3)	         |               
+	|		    															routing table									   |   				 |
+	|		    																											   |	   			 |	  
+	+--------------------------------------------------------------------------------------------------------------------------+		    	 |		
+																																				 |		  
+																												                              docker0
+	+--------------------------------------------------------------------------------------------------------------------------+				 |
+	|	container1																											   |                 |
+	|																										ARP cache		   |                 |
+	|																										    |              |                 |
+	|																				<------------------------> ARP ----        |                 |
+	|																			  /							    		\___   |				 |				
+	|																			  |							    	  		\  |		         |
+	|		   															  ICMP + IP < --------------------------------------> eth0 <------->veth769ab0b
+	|		    																  |						                  (172.17.0.2)	                        
+	|		    															routing table									   |   				 
+	|		    																											   |	   			 	  
+	+--------------------------------------------------------------------------------------------------------------------------+		   	
+
+	Note : The destination doesn't need a ping program to reply to source's ping. (Try pinging after uninstalling iputils-ping on container1 )
+
+	At a high level, ping command first sends an Echo Request packet to an address, then waits for a reply.
+	The ping is successful only if:
+	-> the Echo Request gets to the destination, and
+	-> the destination is able to get an echo reply back to the source within a predetermined timeout.
+
+	Networking protocols used here: 
+	->	ICMP, IP, ARP.
+	Path of packets through interfaces:
+	->	eth0 on container1 ---> veth769ab0b ---> docker0 ---> veth682aac3 ------> eth0 on container2.
+
 #12 - Imagine, container1 and container2 are in different VMs or servers. What do you think would change from what you described in #11?
+
+A)	In #11, container1 and container2 are attached to the default network bridge(docker0) which means they are in same network. They have the same network namespace.
+
+	When container1 and container2 are created in different VMs or servers, they are attached to their default bridge networks. The scope of their communication is limited to their private network (172.17.0.0/16) under their own bridge (docker0) network. 
+	Sure, they can access the outside world. But these containers can only communicate across networks they are each connected to. 
+
 
 #13 - Push this file with the answers to your private github repository
 
-#14 - Send an email to Dimitris and Manuel with a link to the document in your github repo
+	$ git commit -m "updated TASK.txt with the answers"
+	$ git push
 
+#14 - Send an email to Dimitris and Manuel with a link to the document in your github repo
 
 Please contact Dimitris or Manuel if you get stuck in any of the steps
