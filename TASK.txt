@@ -143,17 +143,20 @@ A)	$ docker exec -it container2 ping -c 1 172.17.0.2
 
 #12 - Imagine, container1 and container2 are in different VMs or servers. What do you think would change from what you described in #11?
 
-A)	In #11, container1 and container2 are attached to the default network bridge(docker0) which means they are in same network. They have the same network namespace.
+A)	In #11, container1 and container2 are attached to the default network bridge(docker0) which means they are in same network. They have the same network namespace. They can communicate with each other.
 
-	When container1 and container2 are created in different VMs or servers, they are attached to their default bridge networks. The scope of their communication is limited to their private network (172.17.0.0/16) under their own bridge (docker0) network. 
+	When container1 and container2 are created in different VMs or servers, they are attached to their default bridge networks. The scope of their communication is limited to their private network (172.17.0.0/16) under their own bridge (docker0) network.  
 	Sure, they can access the outside world. But these containers can only communicate across networks they are each connected to. 
 
 
 #13 - Push this file with the answers to your private github repository
 
+	$ git add -A
 	$ git commit -m "updated TASK.txt with the answers"
 	$ git push
 
 #14 - Send an email to Dimitris and Manuel with a link to the document in your github repo
+
+	Done!
 
 Please contact Dimitris or Manuel if you get stuck in any of the steps
