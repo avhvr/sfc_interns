@@ -22,13 +22,14 @@ A)	$ ssh opnfv@10.10.100.21
 
 #4 - How would you ssh our server without having to write the password? If you know a way, apart from briefly explaining how, please try to do it. HINT: Restarting the sshd process (ssh server) is not needed
 
-A) Using public-key authentication
+A) Using public key authentication
 
-	Gene
-
-	$ ssh-keygen
-	$ ssh-copy-id -i ~/.ssh/id_rsa.pub 10.10.100.21
-	$ ssh opnfv@10.10.100.21
+	Generation of key pair.
+		$ ssh-keygen
+	Copying the public key to the server.
+		$ ssh-copy-id -i ~/.ssh/id_rsa.pub 10.10.100.21
+	Logging into server	
+		$ ssh opnfv@10.10.100.21
 
 #5 - ssh to your VM running in the server. The ip was provided in the mail
 
